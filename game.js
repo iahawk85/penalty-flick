@@ -8,6 +8,8 @@
   const bestEl = document.getElementById('best');
   const levelEl = document.getElementById('level');
   const shotsEl = document.getElementById('shots');
+  const clockEl = document.getElementById('clock');
+  const clockPill = document.getElementById('clockPill');
   const hintEl = document.getElementById('hint');
   const startScreen = document.getElementById('startScreen');
   const gameOverScreen = document.getElementById('gameOverScreen');
@@ -28,11 +30,15 @@
     score: 0,
     best: +(localStorage.getItem('pf_best') || 0),
     level: 1,
-    shotsLeft: 5,
+    shotsLeft: 4,
+    totalShots: 0,
     levelGoals: 0,
     levelTarget: 3,
-    keeperReaction: 0.42, // fraction of predicted time before keeper commits
     keeperSpeed: 1.0,
+    keeperImperfection: 0.35,
+    shotClock: 5.0,           // seconds remaining to take the shot
+    shotClockMax: 5.0,
+    wind: 0,                  // px/s^2 horizontal drift this shot
   };
 
   const field = {
@@ -88,9 +94,9 @@
     ball.x = field.ballRest.x;
     ball.y = field.ballRest.y;
 
-    // Keeper size scales with goal height
-    field.keeperH = goalHeight * 0.92;
-    field.keeperW = field.keeperH * 0.7;
+    // Keeper size scales with goal height (made wider/taller — harder to beat)
+    field.keeperH = goalHeight * 1.05;
+    field.keeperW = field.keeperH * 0.85;
     field.keeperBaseY = goalTop + goalHeight - field.keeperH / 2;
     field.keeperX = field.w / 2;
     field.keeperY = field.keeperBaseY;
@@ -408,6 +414,7 @@
   function shoot(pullDx, pullDy, pullMag) {
     const maxPull = 200;
     const power = Math.min(1, pullMag / maxPull);
+    game.totalShots++;
     // Map pull to launch velocity. The harder you pull back, the harder the kick.
     const launchSpeed = 620 + power * 880; // px/s
     // Slight upward lift on weak shots; arcing on stronger ones
@@ -424,6 +431,11 @@
     ball.trail.length = 0;
     game.state = STATE.FLYING;
     game.keeperTargetX = predictKeeperTarget();
+    // Reduce keeper prediction imperfection as levels rise (better AI)
+    const noise = Math.max(0, (game.keeperImperfection || 0));
+    if (noise > 0) {
+      game.keeperTargetX += (Math.random() - 0.5) * noise * field.keeperW;
+    }
   }
 
   function predictKeeperTarget() {
@@ -451,9 +463,23 @@
   const GRAVITY = 1400; // px/s^2
 
   function update(dt) {
+    // Shot clock runs while waiting to shoot
+    if (game.state === STATE.READY) {
+      game.shotClock -= dt;
+      if (game.shotClock <= 0) {
+        game.shotClock = 0;
+        // Timeout = wide shot (no goal, no save banner)
+        resolve(false, false, true);
+        return;
+      }
+      updateClockHUD();
+      return;
+    }
+
     if (game.state !== STATE.FLYING) return;
 
-    // Move ball
+    // Move ball — apply wind drift on horizontal velocity
+    ball.vx += game.wind * dt;
     ball.vy += GRAVITY * dt;
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
@@ -461,27 +487,26 @@
     ball.trail.push({ x: ball.x, y: ball.y });
     if (ball.trail.length > 18) ball.trail.shift();
 
-    // Move keeper toward predicted target
+    // Move keeper toward predicted target (faster than before)
     const target = game.keeperTargetX;
     const dx = target - field.keeperX;
-    const move = Math.sign(dx) * Math.min(Math.abs(dx), field.keeperW * 4 * dt * game.keeperSpeed);
+    const dive = field.keeperW * 6.5 * dt * game.keeperSpeed;
+    const move = Math.sign(dx) * Math.min(Math.abs(dx), dive);
     field.keeperX += move;
 
-    // Bounce off side walls (post collisions)
-    if (ball.x - ball.r < 0 && ball.y < field.goalLineY + 4) {
-      ball.x = ball.r;
-      ball.vx = Math.abs(ball.vx) * 0.55;
-    } else if (ball.x + ball.r > field.w && ball.y < field.goalLineY + 4) {
-      ball.x = field.w - ball.r;
-      ball.vx = -Math.abs(ball.vx) * 0.55;
+    // Post collision — hitting either post counts as a save (no banking shots in)
+    const hitLeftPost  = (ball.x - ball.r < field.goalX + 4) && ball.y < field.goalLineY;
+    const hitRightPost = (ball.x + ball.r > field.goalX + field.goalW - 4) && ball.y < field.goalLineY;
+    if (hitLeftPost || hitRightPost) {
+      resolve(false, true);
+      return;
     }
 
-    // Goal collisions (top crossbar)
+    // Crossbar (top) — also a save now
     if (ball.y - ball.r < field.goalY &&
         ball.x > field.goalX && ball.x < field.goalX + field.goalW) {
-      ball.y = field.goalY + ball.r;
-      ball.vy = Math.abs(ball.vy) * 0.4;
-      ball.vx *= 0.85;
+      resolve(false, true);
+      return;
     }
 
     // Goal detection
@@ -521,7 +546,7 @@
     }
   }
 
-  function resolve(isGoal, isSave) {
+  function resolve(isGoal, isSave, isTimeout) {
     game.state = STATE.RESOLVED;
     if (isGoal) {
       game.score++;
@@ -529,16 +554,15 @@
       game.best = Math.max(game.best, game.score);
       localStorage.setItem('pf_best', String(game.best));
       showBanner(goalBanner);
-      // Continue if level not done
       if (game.levelGoals >= game.levelTarget) {
-        // Next level after a beat
         setTimeout(() => {
           game.level++;
-          game.shotsLeft = 5;
           game.levelGoals = 0;
-          game.levelTarget = 3 + Math.floor(game.level * 0.5);
-          game.keeperSpeed = 1 + (game.level - 1) * 0.18;
-          game.keeperReaction = Math.max(0.2, 0.42 - (game.level - 1) * 0.025);
+          // Tighten budget: fewer shots, more goals required at higher levels
+          game.shotsLeft     = Math.max(3, 5 - Math.floor((game.level - 1) / 2));
+          game.levelTarget   = 3 + Math.floor((game.level - 1) * 0.6);
+          game.keeperSpeed   = 1 + (game.level - 1) * 0.22;
+          game.keeperImperfection = Math.max(0.05, 0.35 - (game.level - 1) * 0.04);
           resetForNextShot();
           updateHUD();
         }, 900);
@@ -557,12 +581,12 @@
         updateHUD();
       }, 900);
     } else {
-      // Miss / wide
-      game.shotsLeft--;
+      // Miss / wide / timeout — no banner, just counts down
       setTimeout(() => {
+        game.shotsLeft--;
         resetForNextShot();
         updateHUD();
-      }, 600);
+      }, isTimeout ? 400 : 600);
     }
     updateHUD();
     checkGameOver();
@@ -570,11 +594,28 @@
 
   function showBanner(el) {
     el.classList.remove('show');
-    void el.offsetWidth; // restart animation
+    void el.offsetWidth;
     el.classList.add('show');
   }
 
+  function rollBallPlacement() {
+    // Randomize X position so the keeper can't always sit on the same spot.
+    // Keep the ball within the goal's projected footprint.
+    const lo = field.goalX + field.w * 0.18;
+    const hi = field.goalX + field.goalW - field.w * 0.18;
+    field.ballRest.x = lo + Math.random() * (hi - lo);
+    field.ballRest.y = field.groundY - 24;
+  }
+
+  function rollWind() {
+    // px/s^2 horizontal acceleration: ~ ±25% of base launch speed range.
+    const mag = (Math.random() * 0.55 + 0.15) * 380; // 57..209
+    game.wind = (Math.random() < 0.5 ? -1 : 1) * mag;
+  }
+
   function resetForNextShot() {
+    rollBallPlacement();
+    rollWind();
     ball.x = field.ballRest.x;
     ball.y = field.ballRest.y;
     ball.vx = 0; ball.vy = 0;
@@ -584,6 +625,9 @@
     field.keeperY = field.keeperBaseY;
     game.keeperTargetX = field.w / 2;
     game.state = STATE.READY;
+    game.shotClock = game.shotClockMax;
+    if (clockPill) clockPill.classList.remove('urgent');
+    updateClockHUD();
   }
 
   function updateHUD() {
@@ -593,11 +637,22 @@
     shotsEl.textContent = Math.max(0, game.shotsLeft);
   }
 
+  function updateClockHUD() {
+    if (!clockEl) return;
+    const sec = Math.ceil(game.shotClock);
+    clockEl.textContent = `⏱ ${sec}`;
+    if (game.shotClock <= 1.5 && clockPill) {
+      clockPill.classList.add('urgent');
+    } else if (clockPill) {
+      clockPill.classList.remove('urgent');
+    }
+  }
+
   function checkGameOver() {
     if (game.shotsLeft <= 0 && game.state === STATE.READY) {
       finalScore.textContent = game.score;
       finalBest.textContent = game.best;
-      finalShots.textContent = (game.level - 1) * 5 + (5 - game.shotsLeft);
+      finalShots.textContent = game.totalShots;
       finalText.textContent = `You scored ${game.score} ${game.score === 1 ? 'goal' : 'goals'}.`;
       gameOverScreen.hidden = false;
     }
@@ -631,11 +686,13 @@
   function startGame() {
     game.score = 0;
     game.level = 1;
-    game.shotsLeft = 5;
+    game.shotsLeft = 4;
+    game.totalShots = 0;
     game.levelGoals = 0;
     game.levelTarget = 3;
     game.keeperSpeed = 1;
-    game.keeperReaction = 0.42;
+    game.keeperImperfection = 0.35;
+    game.shotClock = game.shotClockMax;
     updateHUD();
     startScreen.style.display = 'none';
     gameOverScreen.hidden = true;

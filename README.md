@@ -8,7 +8,10 @@ your personal best.
 
 - **Touch / mouse:** drag the ball toward you and release to shoot.
 - **Aim:** the further you pull, the harder the shot. Aim for the corners.
-- **Game:** 5 shots per level. Score 3+ to advance. The keeper gets faster each level.
+- **Game:** 4 shots per level, 5-second shot clock. Score 3+ to advance. Each level
+  the keeper grows wider, dives faster, predicts more accurately, the ball is
+  placed randomly, and a crosswind drifts your shot. Hitting the post or
+  crossbar counts as a save — you have to thread the needle.
 
 ## Run locally
 
