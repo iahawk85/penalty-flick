@@ -473,12 +473,11 @@
     // the keeper's "nervous" sway continues underneath the dive.
     game.keeperPhase += dt;
 
-    // Shot clock runs while waiting to shoot
-    if (game.state === STATE.READY) {
-      // Idle sway: bounce side-to-side on the line, keeps the keeper active.
+    // Shot clock + idle sway run in both READY and AIMING — the keeper never
+    // pauses while you're lining up the shot.
+    if (game.state === STATE.READY || game.state === STATE.AIMING) {
       const amp = field.keeperW * game.keeperSwayAmp;
       const sway = Math.sin(game.keeperPhase * Math.PI * 2 * game.keeperSwayFreq) * amp;
-      // Mix a small second harmonic so the motion isn't perfectly periodic.
       const jitter = Math.sin(game.keeperPhase * 9.3) * amp * 0.18;
       const targetX = field.w / 2 + sway + jitter;
       const goalMin = field.goalX + field.keeperW / 2;
@@ -488,13 +487,15 @@
       const move = Math.sign(dx) * Math.min(Math.abs(dx), field.keeperW * 9 * dt);
       field.keeperX += move;
 
-      game.shotClock -= dt;
-      if (game.shotClock <= 0) {
-        game.shotClock = 0;
-        resolve(false, false, true);
-        return;
+      if (game.state === STATE.READY) {
+        game.shotClock -= dt;
+        if (game.shotClock <= 0) {
+          game.shotClock = 0;
+          resolve(false, false, true);
+          return;
+        }
+        updateClockHUD();
       }
-      updateClockHUD();
       return;
     }
 
