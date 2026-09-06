@@ -36,9 +36,14 @@
     levelTarget: 3,
     keeperSpeed: 1.0,
     keeperImperfection: 0.35,
+    keeperSwayAmp: 0.42,      // fraction of keeper width to sway while idle
+    keeperSwayFreq: 1.7,      // Hz of idle sway
+    keeperReactTime: 0.18,    // seconds before keeper commits to dive (lower = harder)
     shotClock: 5.0,           // seconds remaining to take the shot
     shotClockMax: 5.0,
     wind: 0,                  // px/s^2 horizontal drift this shot
+    keeperPhase: 0,           // seconds accumulated for idle sway
+    keeperDiveTimer: 0,       // counts up after a shot — keeper "reacts" before committing
   };
 
   const field = {
@@ -430,6 +435,7 @@
     ball.spin = 0;
     ball.trail.length = 0;
     game.state = STATE.FLYING;
+    game.keeperDiveTimer = 0;
     game.keeperTargetX = predictKeeperTarget();
     // Reduce keeper prediction imperfection as levels rise (better AI)
     const noise = Math.max(0, (game.keeperImperfection || 0));
@@ -463,12 +469,28 @@
   const GRAVITY = 1400; // px/s^2
 
   function update(dt) {
+    // Always tick the keeper's idle motion clock — even when the ball is flying
+    // the keeper's "nervous" sway continues underneath the dive.
+    game.keeperPhase += dt;
+
     // Shot clock runs while waiting to shoot
     if (game.state === STATE.READY) {
+      // Idle sway: bounce side-to-side on the line, keeps the keeper active.
+      const amp = field.keeperW * game.keeperSwayAmp;
+      const sway = Math.sin(game.keeperPhase * Math.PI * 2 * game.keeperSwayFreq) * amp;
+      // Mix a small second harmonic so the motion isn't perfectly periodic.
+      const jitter = Math.sin(game.keeperPhase * 9.3) * amp * 0.18;
+      const targetX = field.w / 2 + sway + jitter;
+      const goalMin = field.goalX + field.keeperW / 2;
+      const goalMax = field.goalX + field.goalW - field.keeperW / 2;
+      const clamped = Math.max(goalMin, Math.min(goalMax, targetX));
+      const dx = clamped - field.keeperX;
+      const move = Math.sign(dx) * Math.min(Math.abs(dx), field.keeperW * 9 * dt);
+      field.keeperX += move;
+
       game.shotClock -= dt;
       if (game.shotClock <= 0) {
         game.shotClock = 0;
-        // Timeout = wide shot (no goal, no save banner)
         resolve(false, false, true);
         return;
       }
@@ -487,9 +509,19 @@
     ball.trail.push({ x: ball.x, y: ball.y });
     if (ball.trail.length > 18) ball.trail.shift();
 
-    // Move keeper toward predicted target (faster than before)
-    const target = game.keeperTargetX;
-    const dx = target - field.keeperX;
+    // Keeper: reacts for a beat, then commits to a dive. While reacting, the
+    // keeper keeps swaying — only after `keeperReactTime` does it commit to
+    // the predicted target. Adds an exploitable window for fast shots.
+    game.keeperDiveTimer += dt;
+    const amp = field.keeperW * game.keeperSwayAmp * 0.55; // smaller amplitude while diving
+    const sway = Math.sin(game.keeperPhase * Math.PI * 2 * game.keeperSwayFreq * 1.2) * amp;
+    const bias = game.keeperDiveTimer < game.keeperReactTime
+      ? sway                                        // still swaying
+      : game.keeperTargetX + sway * 0.3;            // committed, with small residual sway
+    const goalMin = field.goalX + field.keeperW / 2;
+    const goalMax = field.goalX + field.goalW - field.keeperW / 2;
+    const clamped = Math.max(goalMin, Math.min(goalMax, bias));
+    const dx = clamped - field.keeperX;
     const dive = field.keeperW * 6.5 * dt * game.keeperSpeed;
     const move = Math.sign(dx) * Math.min(Math.abs(dx), dive);
     field.keeperX += move;
@@ -563,6 +595,9 @@
           game.levelTarget   = 3 + Math.floor((game.level - 1) * 0.6);
           game.keeperSpeed   = 1 + (game.level - 1) * 0.22;
           game.keeperImperfection = Math.max(0.05, 0.35 - (game.level - 1) * 0.04);
+          game.keeperSwayFreq = 1.7 + (game.level - 1) * 0.18;          // more frantic
+          game.keeperSwayAmp  = Math.min(0.7, 0.42 + (game.level - 1) * 0.05);
+          game.keeperReactTime = Math.max(0.05, 0.18 - (game.level - 1) * 0.02); // commits sooner
           resetForNextShot();
           updateHUD();
         }, 900);
@@ -624,6 +659,7 @@
     field.keeperX = field.w / 2;
     field.keeperY = field.keeperBaseY;
     game.keeperTargetX = field.w / 2;
+    game.keeperDiveTimer = 0;
     game.state = STATE.READY;
     game.shotClock = game.shotClockMax;
     if (clockPill) clockPill.classList.remove('urgent');

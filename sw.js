@@ -1,4 +1,4 @@
-const CACHE = 'penalty-flick-v2';
+const CACHE = 'penalty-flick-v3';
 const ASSETS = [
   './',
   './index.html',
