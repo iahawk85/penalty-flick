@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#0e8f44"/>
+      <stop offset="100%" stop-color="#064826"/>
+    </radialGradient>
+    <radialGradient id="ball" cx="40%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="80%" stop-color="#e8e8e8"/>
+      <stop offset="100%" stop-color="#bcbcbc"/>
+    </radialGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" ry="96" fill="url(#bg)"/>
+  <!-- Goal frame -->
+  <rect x="64" y="64" width="384" height="200" rx="6" ry="6"
+        fill="none" stroke="#ffffff" stroke-width="14" stroke-linejoin="round"/>
+  <!-- Net hint -->
+  <g stroke="rgba(255,255,255,0.35)" stroke-width="2">
+    <line x1="64" y1="100" x2="448" y2="100"/>
+    <line x1="64" y1="140" x2="448" y2="140"/>
+    <line x1="64" y1="180" x2="448" y2="180"/>
+    <line x1="64" y1="220" x2="448" y2="220"/>
+    <line x1="140" y1="64" x2="140" y2="264"/>
+    <line x1="220" y1="64" x2="220" y2="264"/>
+    <line x1="300" y1="64" x2="300" y2="264"/>
+    <line x1="380" y1="64" x2="380" y2="264"/>
+  </g>
+  <!-- Keeper silhouette -->
+  <g fill="#f4d35e" stroke="#222" stroke-width="3">
+    <rect x="216" y="160" width="80" height="90" rx="14"/>
+    <circle cx="256" cy="138" r="22" fill="#f1c27d"/>
+    <rect x="180" y="170" width="30" height="78" rx="10"/>
+    <rect x="302" y="170" width="30" height="78" rx="10"/>
+  </g>
+  <!-- Ball -->
+  <circle cx="256" cy="380" r="74" fill="url(#ball)" stroke="#222" stroke-width="3"/>
+  <g fill="#222">
+    <polygon points="256,355 282,370 274,395 238,395 230,370"/>
+    <polygon points="296,395 314,378 326,398 308,415 290,415"/>
+    <polygon points="216,395 198,378 186,398 204,415 222,415"/>
+  </g>
+</svg>

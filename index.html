@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a7d3b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Penalty Flick - Soccer PWA</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="hud-top">
+      <div class="hud-left">
+        <div class="hud-pill" id="scorePill">⚽ <span id="score">0</span></div>
+        <div class="hud-pill" id="levelPill">Lvl <span id="level">1</span></div>
+      </div>
+      <div class="hud-right">
+        <div class="hud-pill" id="bestPill">🏆 <span id="best">0</span></div>
+        <div class="hud-pill" id="shotsPill">🎯 <span id="shots">5</span></div>
+      </div>
+    </header>
+
+    <canvas id="game" aria-label="Soccer penalty flick game"></canvas>
+
+    <div class="hint" id="hint">Flick the ball toward the goal!</div>
+
+    <!-- Start screen -->
+    <div class="overlay" id="startScreen">
+      <div class="overlay-card">
+        <div class="logo">⚽</div>
+        <h1>Penalty Flick</h1>
+        <p class="tag">Flick the ball. Beat the keeper. Score goals.</p>
+        <button class="btn primary" id="playBtn">Play</button>
+        <div class="how-to">
+          <div><span>👆</span> Drag the ball and release to shoot</div>
+          <div><span>🎯</span> Aim for the corners</div>
+          <div><span>🧤</span> Watch out for the keeper</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Goal overlay -->
+    <div class="banner" id="goalBanner">GOAL!</div>
+
+    <!-- Save overlay -->
+    <div class="banner warn" id="saveBanner">SAVED!</div>
+
+    <!-- Game over -->
+    <div class="overlay" id="gameOverScreen" hidden>
+      <div class="overlay-card">
+        <div class="logo">🏁</div>
+        <h1>Full Time</h1>
+        <p class="tag" id="finalText">You scored 0 goals.</p>
+        <div class="final-stats">
+          <div><span id="finalScore">0</span><label>Goals</label></div>
+          <div><span id="finalBest">0</span><label>Best</label></div>
+          <div><span id="finalShots">0</span><label>Shots</label></div>
+        </div>
+        <button class="btn primary" id="restartBtn">Play Again</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
